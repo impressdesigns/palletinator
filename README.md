@@ -1,2 +1,1 @@
-# palletinator
-Pallet-inator
+# Pallet-inator
