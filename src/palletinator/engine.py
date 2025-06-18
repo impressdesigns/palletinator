@@ -27,7 +27,7 @@ class Palletinator:
         pallet = Pallet()
         for row in rows:
             for side in row.sides:
-                while len(pallet.sides) <= side:
+                while len(pallet.sides) < side:
                     pallet.sides.append(PalletSide())
 
                 if repeat_columns or row.columns[0] == 5:  # noqa: PLR2004
@@ -38,7 +38,7 @@ class Palletinator:
 
                 pallet_side = pallet.sides[side]
                 for column in columns:
-                    while len(pallet_side.columns) <= column:
+                    while len(pallet_side.columns) < column:
                         pallet_side.columns.append(PalletColumn())
 
                     design_key = "[FIXME]"
