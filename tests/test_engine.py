@@ -1,6 +1,6 @@
 """Testing the client."""
 
-from palletinator import Palletinator, Row
+from palletinator import Row, parse_pallet
 
 ROW = Row(
     baby_zppk="ZPPK-1234",
@@ -11,8 +11,7 @@ ROW = Row(
 
 def test_parse_pallet() -> None:
     """Test parsing a pallet."""
-    engine = Palletinator()
-    pallet = engine.parse_pallet([ROW])
+    pallet = parse_pallet([ROW])
 
     assert len(pallet.sides) == 1
     assert len(pallet.sides[0].columns) == 2  # noqa: PLR2004

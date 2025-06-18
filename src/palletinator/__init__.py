@@ -1,6 +1,6 @@
 """Pallet-inator."""
 
-from .engine import Palletinator, Row
+from .engine import Row, parse_pallet
 from .pallet import Pallet, PalletCell, PalletColumn, PalletSide
 
 __all__ = [
@@ -8,6 +8,6 @@ __all__ = [
     "PalletCell",
     "PalletColumn",
     "PalletSide",
-    "Palletinator",
     "Row",
+    "parse_pallet",
 ]
