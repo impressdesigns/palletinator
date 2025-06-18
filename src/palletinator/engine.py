@@ -36,14 +36,14 @@ class Palletinator:
                 else:
                     columns = row.columns
 
-                pallet_side = pallet.sides[side]
+                pallet_side = pallet.sides[side - 1]
                 for column in columns:
                     while len(pallet_side.columns) < column:
                         pallet_side.columns.append(PalletColumn())
 
                     design_key = "[FIXME]"
 
-                    pallet_side.columns[column].cells.append(
+                    pallet_side.columns[column - 1].cells.append(
                         PalletCell(
                             metadata={"design_key": design_key},
                             display_text=row.baby_zppk,
