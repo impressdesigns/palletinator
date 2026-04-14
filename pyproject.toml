@@ -17,7 +17,7 @@ docs = [
     "sphinx-autoapi>=3.1.2",
     "releases>=2.1.1",
 ]
-tests = ["pytest>=8.2.2", "pytest-randomly>=3.15.0", "coverage>=7.6.1"]
+tests = ["pytest>=9.0.3", "pytest-randomly>=3.15.0", "coverage>=7.6.1"]
 
 [project.urls]
 repository = "https://github.com/impressdesigns/palletinator/"
