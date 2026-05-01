@@ -1,64 +1,55 @@
-"""Pallet Program."""
+"""Pallet processing engine.
 
-import base64
+Turns a pallet-program CSV export into a structured list of `Pallet`
+objects. The engine performs no I/O: it does not contact a database,
+fetch images, render PDFs, or send mail. Callers are responsible for
+enriching cells (using each cell's ``photo_lookup_key``) and for any
+downstream presentation.
+"""
+
 import csv
-from dataclasses import asdict, dataclass
-from enum import Enum, auto
-from io import BytesIO, StringIO
-from typing import Self
+from dataclasses import dataclass
+from io import StringIO
+from typing import TYPE_CHECKING, Self
 
-import httpx
-from msgraph.generated.models.file_attachment import FileAttachment
-from PIL import Image
-from sqlalchemy import select
-from weasyprint import CSS, HTML
+from palletinator.models import Cell, Column, Pallet, PalletType, Side
 
-from core.common.mailer import send_mail
-from core.common.templating import template_environment
-from core.data import OnSiteDesign, Session
-from core.external.local_api import local_api_client
-from core.models.pallet_program import ColumnNames, PDFsRequest
+if TYPE_CHECKING:
+    from palletinator.inputs import ColumnNames, Request
+
+_FIVE_COLUMN_TRIGGER = 5
+_MAX_CELLS_PER_COLUMN = 4
 
 
-def get_image_for_design(design_number: int, size: tuple[int, int] | None = None) -> str:
-    """Find and load to base64."""
-    image_bytes = local_api_client.get_design_image(design_number)
+def process(request: Request) -> list[Pallet]:
+    """Process a pallet-program CSV export into structured pallet data.
 
-    image = Image.open(BytesIO(image_bytes))
-    if size:
-        image.thumbnail(size)
+    Parameters
+    ----------
+    request
+        The CSV payload and the column-name mapping describing where
+        each logical field lives in the export.
 
-    buffered = BytesIO()
-    image.save(buffered, format="PNG")
-    buffered.seek(0)
-
-    return base64.b64encode(buffered.getvalue()).decode()
-
-
-def _find_numbers_in_text(text: float | str) -> list[int]:
-    if isinstance(text, float | int):
-        return [int(text)]
-    return [int(char) for char in text if char.isdigit()]
-
-
-class PalletType(Enum):
-    """Type of pallet."""
-
-    FULL = auto()
-    HALF = auto()
-    TOWER = auto()
+    Returns
+    -------
+    list[Pallet]
+        One `Pallet` per row group in the export.
+    """
+    raw_rows = list(csv.DictReader(StringIO(request.csv_data)))
+    rows = [_Row.from_dict(raw, request.column_names) for raw in raw_rows]
+    return [_build_pallet(group) for group in _group_rows(rows)]
 
 
 @dataclass(frozen=True, slots=True)
-class Row:
-    """A sheet row."""
+class _Row:
+    """An internal parsed CSV row."""
 
-    callout: str
     parent_zppk: str
     baby_zppk: str
     team_key: str
     team_name: str
     requested_pallet_count: int
+    callout: str
     dc_target: str
     color_description: str
     logo_description: str
@@ -66,168 +57,106 @@ class Row:
     columns: list[int]
 
     @classmethod
-    def build_from(cls: type[Self], data: dict, column_names: ColumnNames) -> Self:  # type: ignore[type-arg]
-        """Build `cls` from `dict`."""
-        if column_names.callout is not None:
-            callout = "CLC CREATIVE CORRUGATE" if data.get(column_names.callout) == "Yes" else ""
-        else:
-            callout = ""
+    def from_dict(cls: type[Self], data: dict[str, str], names: ColumnNames) -> Self:
+        """Build a row from a `csv.DictReader` record."""
+        callout = ""
+        if names.callout is not None and data.get(names.callout) == "Yes":
+            callout = "CLC CREATIVE CORRUGATE"
 
-        dc_target = data.get(column_names.date_column) if column_names.date_column is not None else ""
+        dc_target = ""
+        if names.date_column is not None:
+            dc_target = data.get(names.date_column) or ""
 
         return cls(
-            parent_zppk=data.get(column_names.parent_zppk),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            baby_zppk=data.get(column_names.baby_zppk),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            team_key=data.get(column_names.team_key),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            team_name=data.get(column_names.team_name),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            requested_pallet_count=int(data.get(column_names.requested_pallet_count) or 0),
-            dc_target=dc_target,  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            color_description=data.get(column_names.color_description),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
-            logo_description=data.get(column_names.logo_description),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+            parent_zppk=data.get(names.parent_zppk) or "",
+            baby_zppk=data.get(names.baby_zppk) or "",
+            team_key=data.get(names.team_key) or "",
+            team_name=data.get(names.team_name) or "",
+            requested_pallet_count=int(data.get(names.requested_pallet_count) or 0),
             callout=callout,
-            sides=_find_numbers_in_text(data.get(column_names.side, "1")),
-            columns=_find_numbers_in_text(data.get(column_names.column)),  # type: ignore[arg-type] # ty: ignore[invalid-argument-type]
+            dc_target=dc_target,
+            color_description=data.get(names.color_description) or "",
+            logo_description=data.get(names.logo_description) or "",
+            sides=_extract_numbers(data.get(names.side) or "1"),
+            columns=_extract_numbers(data.get(names.column) or ""),
         )
 
 
-@dataclass(frozen=True, slots=True)
-class PalletConfig:
-    """Configuration of a pallet build."""
-
-    zppk: str
-    team_key: str
-    team_name: str
-    callout: str
-    dc_target: str
-    pallet_type: PalletType
-    required_count: int
-    sides: list[list[str]]
-
-    @classmethod
-    def build_from(cls: type[Self], rows: list[Row]) -> Self:
-        """Build `cls` from `dict`."""
-        last = rows.pop()
-
-        return cls(
-            callout=last.callout,
-            dc_target=last.dc_target,
-            zppk=rows[-1].parent_zppk,
-            team_name=rows[-1].team_name,
-            team_key=rows[-1].team_key,
-            pallet_type=PalletType.TOWER,
-            required_count=last.requested_pallet_count,
-            sides=flip_pallet_sides(parse_sides(rows, repeat_columns=False)),
-        )
+def _extract_numbers(text: str) -> list[int]:
+    """Pull the digit characters out of `text` as a list of single-digit ints."""
+    return [int(char) for char in text if char.isdigit()]
 
 
-def parse_sides(  # noqa: C901,PLR0912 -- split this up
-    rows: list[Row],
-    *,
-    repeat_columns: bool = False,
-) -> list[list[str]]:
-    """Parse sides for half pallet."""
-    column_designs_cache = {}
-    sides = {}  # type: ignore[var-annotated]
+def _group_rows(rows: list[_Row]) -> list[list[_Row]]:
+    """Split rows into groups, terminating on a non-zero `requested_pallet_count`."""
+    groups: list[list[_Row]] = []
+    current: list[_Row] = []
     for row in rows:
-        for side in row.sides:
-            if row.columns[0] == 5:  # noqa: PLR2004 -- confirm what this does
-                repeat_columns = True
-                columns = [2] if side % 2 == 0 else [3]
-            else:
-                columns = row.columns
-            columns = list(range(1, columns[0] + 1)) if repeat_columns else columns
-            for column in columns:
-                if side not in sides:
-                    sides[side] = {}
-                if column not in sides[side]:
-                    sides[side][column] = []
-                    column_designs_cache[side, column] = " ".join(
-                        (
-                            row.logo_description[:7],
-                            row.color_description.replace(",", ""),
-                            row.team_key,
-                        ),
-                    )
-                sides[side][column].append(row.baby_zppk)
-
-    last_used_design_number = None
-    last_used_design_image = None
-    output = []
-    for side_key in sorted(sides.keys()):
-        current_side = sides[side_key]
-        for column_key in sorted(current_side.keys()):
-            row = current_side[column_key]
-            if len(row) > 4:  # noqa: PLR2004 -- temp
-                row = row[-4:]
-            with Session() as session:
-                key_ = column_designs_cache[side_key, column_key]
-                design_number = session.scalars(
-                    select(OnSiteDesign.number).where(OnSiteDesign.title.ilike(f"{key_}%")),
-                ).first()
-            if design_number and design_number == last_used_design_number:
-                image = last_used_design_image
-            else:
-                last_used_design_number = design_number
-                if design_number is not None:
-                    try:
-                        image = get_image_for_design(design_number, (70, 70))
-                    except Exception:  # noqa: BLE001
-                        image = f"{key_=} {design_number=}"
-                else:
-                    image = f"{key_=} {design_number=}"
-                last_used_design_image = image
-            row.append(str(image))
-            output.append(row)
-    return output
-
-
-def flip_pallet_sides(data: list[list[str]]) -> list[list[str]]:
-    """Flip the sides on a pallet."""
-    heads = ["XS (13) / S (13)", "M (30)", "L (32)", "XL (20)", "IMAGE"]
-    output = []
-    for index, head in enumerate(heads):
-        output.append([head] + [lst[index] for lst in data])
-    return output
-
-
-async def generate_pallet_detail_sheets(
-    pdfs_request: PDFsRequest,
-) -> None:
-    """Build and send a report."""
-    raw_rows = list(csv.DictReader(StringIO(pdfs_request.file_data)))
-
-    rows = [Row.build_from(raw_row, pdfs_request.column_names) for raw_row in raw_rows]
-    row_groups = []
-    group = []
-    for row in rows:
-        group.append(row)
+        current.append(row)
         if row.requested_pallet_count != 0:
-            row_groups.append(group)
-            group = []
+            groups.append(current)
+            current = []
+    return groups
 
-    pallet_configs = [PalletConfig.build_from(row_group) for row_group in row_groups]
 
-    html_template = template_environment.get_template("pallet-program/pallet.html.j2")
-    async with httpx.AsyncClient() as client:
-        response = await client.get("https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css")
-    cached_css = CSS(string=response.text)
+def _build_pallet(group: list[_Row]) -> Pallet:
+    """Build a `Pallet` from a single row group."""
+    last = group[-1]
+    header = group[-2] if len(group) > 1 else last
+    body = group[:-1] if len(group) > 1 else group
 
-    documents = []
-    for pallet_config in pallet_configs:
-        html = HTML(string=html_template.render(asdict(pallet_config)))
-        documents.append(html.render(stylesheets=[cached_css]))
-    all_pages = [page for document in documents for page in document.pages]
-    bytes_ = documents[0].copy(all_pages).write_pdf()
-
-    attachment = FileAttachment(
-        name="details.pdf",
-        content_type="application/pdf",
-        content_bytes=bytes_,
+    return Pallet(
+        zppk=header.parent_zppk,
+        team_key=header.team_key,
+        team_name=header.team_name,
+        callout=last.callout,
+        dc_target=last.dc_target,
+        pallet_type=PalletType.TOWER,
+        required_count=last.requested_pallet_count,
+        sides=_build_sides(body),
     )
 
-    await send_mail(
-        recipient_addresses=[pdfs_request.email_address],
-        subject="Details PDFs",
-        content="<p>Please see your PDFs attached.</p>",
-        attachments=[attachment],
+
+def _build_sides(rows: list[_Row]) -> list[Side]:
+    """Bucket rows by `(side, column)` and emit `Side` objects in order."""
+    buckets: dict[int, dict[int, list[_Row]]] = {}
+    keys: dict[tuple[int, int], str] = {}
+    repeat_columns = False
+    for row in rows:
+        for side_num in row.sides:
+            if row.columns and row.columns[0] == _FIVE_COLUMN_TRIGGER:
+                repeat_columns = True
+                column_set = [2] if side_num % 2 == 0 else [3]
+            else:
+                column_set = row.columns
+            if not column_set:
+                continue
+            if repeat_columns:
+                column_set = list(range(1, column_set[0] + 1))
+            for column_num in column_set:
+                side_bucket = buckets.setdefault(side_num, {})
+                cell_rows = side_bucket.setdefault(column_num, [])
+                keys.setdefault((side_num, column_num), _photo_lookup_key(row))
+                cell_rows.append(row)
+
+    sides: list[Side] = []
+    for side_num in sorted(buckets):
+        columns: list[Column] = []
+        for column_num in sorted(buckets[side_num]):
+            cell_rows = buckets[side_num][column_num][-_MAX_CELLS_PER_COLUMN:]
+            key = keys[side_num, column_num]
+            cells = [Cell(value=row.baby_zppk, photo_lookup_key=key) for row in cell_rows]
+            columns.append(Column(number=column_num, cells=cells))
+        sides.append(Side(number=side_num, columns=columns))
+    return sides
+
+
+def _photo_lookup_key(row: _Row) -> str:
+    """Build the design-image lookup key for a row."""
+    return " ".join(
+        (
+            row.logo_description[:7],
+            row.color_description.replace(",", ""),
+            row.team_key,
+        ),
     )

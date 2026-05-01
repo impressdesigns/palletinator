@@ -57,7 +57,9 @@ ignore = [
     "INP001", # (File `docs/conf.py` is part of an implicit namespace package. Add an `__init__.py`.) - Docs are not modules
 ]
 "tests/*" = [
-    "S101",   # (Use of `assert` detected) - Yes, that's the point
+    "S101",    # (Use of `assert` detected) - Yes, that's the point
+    "D103",    # (Missing docstring in public function) - Test names are docs
+    "PLR2004", # (Magic value used in comparison) - Tests assert against literals
 ]
 
 [tool.ruff.lint.isort]
