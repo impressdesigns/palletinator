@@ -44,7 +44,10 @@ def build_pallet(
     for side_num in sorted(buckets):
         columns: list[Column] = []
         for column_num in sorted(buckets[side_num]):
-            cells = [Cell(value=p.value, extras=dict(p.extras)) for p in buckets[side_num][column_num]]
+            cells = [
+                Cell(value=placement.value, extras=dict(placement.extras))
+                for placement in buckets[side_num][column_num]
+            ]
             columns.append(Column(number=column_num, cells=cells))
         sides.append(Side(number=side_num, columns=columns))
 

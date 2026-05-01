@@ -66,16 +66,16 @@ def linkcode_resolve(domain: str, info: dict) -> str | None:
 
     mod = importlib.import_module(info["module"])
 
-    val = mod
-    for k in info["fullname"].split("."):
-        val = getattr(val, k, None)
-        if val is None:
+    module_value = mod
+    for key in info["fullname"].split("."):
+        module_value = getattr(module_value, key, None)
+        if module_value is None:
             break
 
     filename = info["module"].replace(".", "/") + ".py"
 
     if isinstance(
-        val,
+        module_value,
         types.ModuleType
         | types.MethodType
         | types.FunctionType
@@ -84,7 +84,7 @@ def linkcode_resolve(domain: str, info: dict) -> str | None:
         | types.CodeType,
     ):
         try:
-            lines, first = inspect.getsourcelines(val)
+            lines, first = inspect.getsourcelines(module_value)
             last = first + len(lines) - 1
             filename += f"#L{first}-L{last}"
         except OSError, TypeError:

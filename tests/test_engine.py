@@ -80,7 +80,7 @@ def test_cell_extras_are_copied_from_placement() -> None:
 
 
 def test_column_keeps_all_placed_cells_in_order() -> None:
-    placements = [CellPlacement(value=f"B{i}", sides=[1], columns=[1]) for i in range(1, 6)]
+    placements = [CellPlacement(value=f"B{index}", sides=[1], columns=[1]) for index in range(1, 6)]
     pallet = build_pallet(placements)
 
     [side] = pallet.sides
