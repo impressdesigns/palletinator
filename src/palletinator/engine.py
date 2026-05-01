@@ -13,13 +13,10 @@ from palletinator.models import Cell, Column, Pallet, Side
 if TYPE_CHECKING:
     from palletinator.inputs import CellPlacement
 
-DEFAULT_MAX_CELLS_PER_COLUMN = 4
-
 
 def build_pallet(
     placements: list[CellPlacement],
     *,
-    max_cells_per_column: int = DEFAULT_MAX_CELLS_PER_COLUMN,
     extras: dict[str, Any] | None = None,
 ) -> Pallet:
     """Build a pallet from a list of cell placements.
@@ -29,9 +26,6 @@ def build_pallet(
     placements
         The cells to place. Each placement is materialised into one
         ``Cell`` per ``(side, column)`` coordinate it specifies.
-    max_cells_per_column
-        Cap on the number of cells per column. The most recently placed
-        cells win when the cap is exceeded.
     extras
         Open-ended metadata bag attached to the resulting ``Pallet``.
 
@@ -50,8 +44,7 @@ def build_pallet(
     for side_num in sorted(buckets):
         columns: list[Column] = []
         for column_num in sorted(buckets[side_num]):
-            kept = buckets[side_num][column_num][-max_cells_per_column:]
-            cells = [Cell(value=p.value, extras=dict(p.extras)) for p in kept]
+            cells = [Cell(value=p.value, extras=dict(p.extras)) for p in buckets[side_num][column_num]]
             columns.append(Column(number=column_num, cells=cells))
         sides.append(Side(number=side_num, columns=columns))
 

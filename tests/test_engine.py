@@ -79,22 +79,13 @@ def test_cell_extras_are_copied_from_placement() -> None:
     assert source == {"k": "v"}
 
 
-def test_column_truncates_to_max_cells_per_column_default_four() -> None:
+def test_column_keeps_all_placed_cells_in_order() -> None:
     placements = [CellPlacement(value=f"B{i}", sides=[1], columns=[1]) for i in range(1, 6)]
     pallet = build_pallet(placements)
 
     [side] = pallet.sides
     [column] = side.columns
-    assert [cell.value for cell in column.cells] == ["B2", "B3", "B4", "B5"]
-
-
-def test_max_cells_per_column_is_configurable() -> None:
-    placements = [CellPlacement(value=f"B{i}", sides=[1], columns=[1]) for i in range(1, 5)]
-    pallet = build_pallet(placements, max_cells_per_column=2)
-
-    [side] = pallet.sides
-    [column] = side.columns
-    assert [cell.value for cell in column.cells] == ["B3", "B4"]
+    assert [cell.value for cell in column.cells] == ["B1", "B2", "B3", "B4", "B5"]
 
 
 def test_placement_with_multiple_sides_and_columns_fans_out() -> None:
