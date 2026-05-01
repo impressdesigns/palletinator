@@ -1,4 +1,4 @@
-name: Python CI
+name: CI
 
 on:
   push:
@@ -10,29 +10,30 @@ permissions:
   contents: read
 
 jobs:
-  lint-test:
-    runs-on: ubuntu-latest
-
+  lint:
+    runs-on: ubuntu-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          resolution-strategy: "lowest"
 
       - name: Setup Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
-          python-version: 3.12
-          allow-prereleases: true
-          cache: pip
-          cache-dependency-path: uv.lock
-
-      - name: Set up uv
-        run: curl -LsSf https://astral.sh/uv/install.sh | sh
+          python-version-file: "pyproject.toml"
 
       - name: Sync dependencies
-        run: uv sync --all-extras
+        run: uv sync --group dev --group tests
 
-      - name: Run pre-commit
-        run: uv run pre-commit run --all-files
+      - name: Run prek
+        run: uv run prek run --all-files
 
       - name: Check formatting
         run: uv run ruff format --check .
@@ -41,23 +42,130 @@ jobs:
         run: uv run ruff check --output-format=github .
 
       - name: Run mypy
-        run: uv run mypy --strict src/
+        run: uv run mypy --strict packages/
 
-      - name: Run tests
-        run: uv run coverage run -m pytest -v
+      - name: Run ty
+        run: uv run ty check .
+
+  test:
+    runs-on: ubuntu-slim
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@08807647e7069bb48b6ef5acd8ec9567f424441b # v8.1.0
+        with:
+          enable-cache: true
+          resolution-strategy: "lowest"
+
+      - name: Setup Python
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version-file: "pyproject.toml"
+
+      - name: Sync dependencies
+        run: uv sync --group dev --group tests
+
+      - name: Run tests with coverage
+        run: uv run python -m coverage run -m pytest -v --junitxml=junit.xml --alluredir allure-results
+
+      - name: Upload Allure results
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: allure-results
+          path: allure-results/
+          if-no-files-found: error
 
       - name: Create coverage report
-        run: uv run coverage xml
+        run: uv run coverage xml -o coverage.xml
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+      - name: Upload coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-reports
+          path: |
+            coverage.xml
+            junit.xml
+          if-no-files-found: error
 
-  docs:
+  codecov:
+    runs-on: ubuntu-slim
+    needs: [test]
+    if: ${{ always() }}
     permissions:
       contents: read
-      pages: write
       id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
 
-    uses: darbiadev/.github/.github/workflows/github-pages-python-sphinx.yaml@440166417b42442c6114aaa895094f0db7de9b78 # v15.2.0
+      - name: Download coverage reports
+        if: ${{ !cancelled() }}
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: coverage-reports
+          path: coverage
+
+      - name: Upload coverage to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        with:
+          report_type: coverage
+          use_oidc: true
+          files: coverage/coverage.xml
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@57e3a136b779b570ffcdbf80b3bdc90e7fab3de2 # v6.0.0
+        with:
+          report_type: test_results
+          use_oidc: true
+          files: coverage/junit.xml
+
+  upload-allure-report:
+    name: Upload Allure report
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download Allure results artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: allure-results
+          path: allure-results
+
+      - name: Install Allure commandline
+        run: npm install -g allure-commandline
+
+      - name: Generate Allure report
+        run: allure generate --clean --single-file
+
+      - name: Give report a better name
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            NAME="allure-pr-${{ github.event.pull_request.number }}-${SHORT_SHA}-run${{ github.run_number }}.html"
+          else
+            NAME="allure-main-${SHORT_SHA}-run${{ github.run_number }}.html"
+          fi
+
+          mv allure-report/index.html "$NAME"
+          echo "REPORT_NAME=$NAME" >> $GITHUB_ENV
+
+      - name: Upload Allure report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          archive: false
+          path: ${{ env.REPORT_NAME }}
+          if-no-files-found: error

@@ -1,51 +1,53 @@
 [project]
 name = "palletinator"
-version = "0.0.0"
+version = "0.1.0"
 description = "Pallet-inator"
 authors = [
-    { name = "Bradley Reynolds", email = "bradley.reynolds@impressdesigns.com" },
+    { name = "Bradley Reynolds", email = "bradley.reynolds@tailstory.dev" },
 ]
 readme = "README.md"
 license = "MIT"
-requires-python = ">=3.13"
+requires-python = ">=3.14"
 dependencies = []
 
-[project.optional-dependencies]
-docs = [
-    "sphinx>=7.4.4",
-    "furo>=2024.5.6",
-    "sphinx-autoapi>=3.1.2",
-    "releases>=2.1.1",
-]
-tests = ["pytest>=9.0.3", "pytest-randomly>=4.1.0", "coverage>=7.6.1"]
-
 [project.urls]
-repository = "https://github.com/impressdesigns/palletinator/"
-documentation = "https://impressdesigns.dev/palletinator/"
+repository = "https://github.com/tailstory-labs/palletinator"
+documentation = "https://tailstory-labs.github.io/palletinator/"
 
 [build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
+requires = ["setuptools>=82"]
+build-backend = "setuptools.build_meta"
 
 [dependency-groups]
 dev = [
-    # DX
     "nox>=2026.4.10",
-    "pre-commit>=4.6.0",
-    # Linters
-    "ruff>=0.15.12",
-    "mypy>=1.20.2",
+    "prek>=0.3.8",
+    "ruff>=0.15.10",
+    "mypy>=1.20.0",
+    "ty>=0.0.29",
+]
+docs = [
+    "sphinx>=8.1.0",
+    "furo>=2025.12.19",
+    "sphinx-autoapi>=3.8.0",
+    "releases>=2.1.1",
+]
+tests = [
+    "coverage>=7.13.4",
+    "pytest>=9.0.3",
+    # Extensions
+    "pytest-randomly>=4.0.1",
+    # Reporting
+    "allure-pytest>=2.15.3",
 ]
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/palletinator"]
-
 [tool.ruff]
-target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["ALL"]
+select = [
+    "ALL",
+]
 ignore = [
     "CPY001", # (Missing copyright notice at top of file) - No license
 ]
@@ -64,8 +66,14 @@ known-first-party = ["palletinator"]
 [tool.ruff.lint.pydocstyle]
 convention = "numpy"
 
-[tool.coverage.run]
-source = ["palletinator"]
+[tool.mypy]
+pretty = true
 
-[tool.pytest.ini_options]
-addopts = "--strict-markers"
+[tool.coverage.run]
+branch = true
+source_pkgs = ["palletinator"]
+source_dirs = ["tests"]
+
+[tool.pytest]
+strict = true
+junit_family = "xunit1"
