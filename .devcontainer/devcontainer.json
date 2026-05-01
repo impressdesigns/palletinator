@@ -1,9 +1,0 @@
-{
-  "image": "mcr.microsoft.com/devcontainers/universal:2",
-  "features": {
-    "ghcr.io/devcontainers/features/python:1.8.0": {
-      "version": "3.13",
-      "installTools": false
-    }
-  }
-}
