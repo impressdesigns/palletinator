@@ -15,7 +15,7 @@ repository = "https://github.com/tailstory-labs/palletinator"
 documentation = "https://tailstory-labs.github.io/palletinator/"
 
 [build-system]
-requires = ["setuptools>=82"]
+requires = ["setuptools>=82.0.1"]
 build-backend = "setuptools.build_meta"
 
 [dependency-groups]
