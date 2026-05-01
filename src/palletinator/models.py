@@ -22,7 +22,7 @@ class Cell:
 
 @dataclass(frozen=True, slots=True)
 class Column:
-    """A column on a pallet side, ordered top-to-bottom."""
+    """A column on a pallet side, with cells ordered top-to-bottom."""
 
     number: int
     cells: list[Cell]
@@ -30,7 +30,7 @@ class Column:
 
 @dataclass(frozen=True, slots=True)
 class Side:
-    """A side of a pallet, ordered left-to-right by column number."""
+    """A side of a pallet, with columns ordered left-to-right by column number."""
 
     number: int
     columns: list[Column]
