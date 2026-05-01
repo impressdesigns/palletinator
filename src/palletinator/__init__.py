@@ -1,16 +1,15 @@
-"""Pallet-inator: a structured-data pallet program processor."""
+"""Pallet-inator: a library for building structured pallet data."""
 
-from palletinator.engine import process
-from palletinator.inputs import ColumnNames, Request
+from palletinator.engine import build_pallet
+from palletinator.inputs import CellPlacement
 from palletinator.models import Cell, Column, Pallet, PalletType, Side
 
 __all__ = [
     "Cell",
+    "CellPlacement",
     "Column",
-    "ColumnNames",
     "Pallet",
     "PalletType",
-    "Request",
     "Side",
-    "process",
+    "build_pallet",
 ]
