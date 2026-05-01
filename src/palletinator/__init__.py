@@ -1,8 +1,8 @@
 """Pallet-inator: a library for building structured pallet data."""
 
-from palletinator.engine import build_pallet
-from palletinator.inputs import CellPlacement
-from palletinator.models import Cell, Column, Pallet, Side
+from .engine import build_pallet
+from .inputs import CellPlacement
+from .models import Cell, Column, Pallet, Side
 
 __all__ = [
     "Cell",

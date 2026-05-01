@@ -8,10 +8,10 @@ metadata it carries.
 
 from typing import TYPE_CHECKING, Any
 
-from palletinator.models import Cell, Column, Pallet, Side
+from .models import Cell, Column, Pallet, Side
 
 if TYPE_CHECKING:
-    from palletinator.inputs import CellPlacement
+    from .inputs import CellPlacement
 
 
 def build_pallet(
