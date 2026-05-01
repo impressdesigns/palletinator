@@ -36,20 +36,20 @@ def build_pallet(
     """
     buckets: dict[int, dict[int, list[CellPlacement]]] = {}
     for placement in placements:
-        for side_num in placement.sides:
-            for column_num in placement.columns:
-                buckets.setdefault(side_num, {}).setdefault(column_num, []).append(placement)
+        for side_number in placement.sides:
+            for column_number in placement.columns:
+                buckets.setdefault(side_number, {}).setdefault(column_number, []).append(placement)
 
     sides: list[Side] = []
-    for side_num in sorted(buckets):
+    for side_number in sorted(buckets):
         columns: list[Column] = []
-        for column_num in sorted(buckets[side_num]):
+        for column_number in sorted(buckets[side_number]):
             cells = [
                 Cell(value=placement.value, extras=dict(placement.extras))
-                for placement in buckets[side_num][column_num]
+                for placement in buckets[side_number][column_number]
             ]
-            columns.append(Column(number=column_num, cells=cells))
-        sides.append(Side(number=side_num, columns=columns))
+            columns.append(Column(number=column_number, cells=cells))
+        sides.append(Side(number=side_number, columns=columns))
 
     return Pallet(
         sides=sides,
