@@ -1,100 +1,69 @@
-"""Tests for the pallet processing engine."""
-
-from textwrap import dedent
+"""Tests for the pallet builder engine."""
 
 from palletinator import (
     Cell,
-    ColumnNames,
-    PalletType,
-    Request,
-    process,
-)
-
-_COLUMN_NAMES = ColumnNames(
-    parent_zppk="parent",
-    baby_zppk="baby",
-    team_key="team_key",
-    team_name="team_name",
-    requested_pallet_count="count",
-    color_description="color",
-    logo_description="logo",
-    column="column",
-    side="side",
-    callout="callout",
-    date_column="dc",
+    CellPlacement,
+    Pallet,
+    build_pallet,
 )
 
 
-def _request(csv_data: str) -> Request:
-    return Request(csv_data=dedent(csv_data).lstrip(), column_names=_COLUMN_NAMES)
+def test_build_pallet_returns_pallet_with_extras() -> None:
+    pallet = build_pallet(
+        [CellPlacement(value="X", sides=[1], columns=[1])],
+        extras={"order_id": "PZ-1"},
+    )
+
+    assert isinstance(pallet, Pallet)
+    assert pallet.extras == {"order_id": "PZ-1"}
 
 
-def test_process_returns_one_pallet_with_expected_top_level_fields() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ-1,BZ-A,TK,Team Name,0,Red,LogoText,1,1,No,
-        PZ-1,BZ-B,TK,Team Name,0,Red,LogoText,1,1,No,
-        PZ-1,BZ-C,TK,Team Name,0,Red,LogoText,1,1,No,
-        PZ-1,BZ-D,TK,Team Name,0,Red,LogoText,1,1,No,
-        ,,,,5,,,,,Yes,2026-06-15
-    """
-    [pallet] = process(_request(csv_data))
-
-    assert pallet.zppk == "PZ-1"
-    assert pallet.team_key == "TK"
-    assert pallet.team_name == "Team Name"
-    assert pallet.required_count == 5
-    assert pallet.pallet_type is PalletType.TOWER
-    assert pallet.callout == "CLC CREATIVE CORRUGATE"
-    assert pallet.dc_target == "2026-06-15"
+def test_pallet_extras_default_to_empty_dict() -> None:
+    pallet = build_pallet([CellPlacement(value="X", sides=[1], columns=[1])])
+    assert pallet.extras == {}
 
 
-def test_cells_carry_value_and_photo_lookup_key() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ-1,BZ-A,TK,Team Name,0,"Red, Bold",LogoTextLong,1,1,No,
-        PZ-1,BZ-B,TK,Team Name,0,"Red, Bold",LogoTextLong,1,1,No,
-        ,,,,1,,,,,No,
-    """
-    [pallet] = process(_request(csv_data))
+def test_pallet_extras_dict_is_independent_per_pallet() -> None:
+    p1 = build_pallet([CellPlacement(value="X", sides=[1], columns=[1])])
+    p2 = build_pallet([CellPlacement(value="X", sides=[1], columns=[1])])
+
+    p1.extras["k"] = "v"
+    assert p2.extras == {}
+
+
+def test_pallet_extras_are_copied_from_input() -> None:
+    source = {"k": "v"}
+    pallet = build_pallet([CellPlacement(value="X", sides=[1], columns=[1])], extras=source)
+
+    pallet.extras["k"] = "other"
+    assert source == {"k": "v"}
+
+
+def test_cells_carry_value_and_extras() -> None:
+    pallet = build_pallet(
+        [
+            CellPlacement(value="A", sides=[1], columns=[1], extras={"key": "K"}),
+            CellPlacement(value="B", sides=[1], columns=[1], extras={"key": "K"}),
+        ],
+    )
 
     [side] = pallet.sides
     assert side.number == 1
     [column] = side.columns
     assert column.number == 1
 
-    assert [cell.value for cell in column.cells] == ["BZ-A", "BZ-B"]
-    expected_key = "LogoTex Red Bold TK"
+    assert [cell.value for cell in column.cells] == ["A", "B"]
     for cell in column.cells:
-        assert cell.photo_lookup_key == expected_key
-        assert cell.extras == {}
+        assert cell.extras == {"key": "K"}
 
 
-def test_column_truncates_to_last_four_cells() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ,B1,TK,Team,0,Red,Logo,1,1,No,
-        PZ,B2,TK,Team,0,Red,Logo,1,1,No,
-        PZ,B3,TK,Team,0,Red,Logo,1,1,No,
-        PZ,B4,TK,Team,0,Red,Logo,1,1,No,
-        PZ,B5,TK,Team,0,Red,Logo,1,1,No,
-        ,,,,1,,,,,No,
-    """
-    [pallet] = process(_request(csv_data))
-    [side] = pallet.sides
-    [column] = side.columns
-
-    assert [cell.value for cell in column.cells] == ["B2", "B3", "B4", "B5"]
-
-
-def test_extras_dict_is_independent_per_cell() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ,B1,TK,Team,0,Red,Logo,1,1,No,
-        PZ,B2,TK,Team,0,Red,Logo,1,1,No,
-        ,,,,1,,,,,No,
-    """
-    [pallet] = process(_request(csv_data))
+def test_cell_extras_dict_is_independent_per_cell() -> None:
+    pallet = build_pallet(
+        [
+            CellPlacement(value="A", sides=[1], columns=[1]),
+            CellPlacement(value="B", sides=[1], columns=[1]),
+        ],
+    )
     [side] = pallet.sides
     [column] = side.columns
 
@@ -102,44 +71,74 @@ def test_extras_dict_is_independent_per_cell() -> None:
     assert column.cells[1].extras == {}
 
 
-def test_column_five_alternates_per_side() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ,B1,TK,Team,0,Red,Logo,5,12,No,
-        ,,,,1,,,,,No,
-    """
-    [pallet] = process(_request(csv_data))
+def test_cell_extras_are_copied_from_placement() -> None:
+    source = {"k": "v"}
+    pallet = build_pallet([CellPlacement(value="A", sides=[1], columns=[1], extras=source)])
+
+    pallet.sides[0].columns[0].cells[0].extras["k"] = "other"
+    assert source == {"k": "v"}
+
+
+def test_column_keeps_all_placed_cells_in_order() -> None:
+    placements = [CellPlacement(value=f"B{i}", sides=[1], columns=[1]) for i in range(1, 6)]
+    pallet = build_pallet(placements)
+
+    [side] = pallet.sides
+    [column] = side.columns
+    assert [cell.value for cell in column.cells] == ["B1", "B2", "B3", "B4", "B5"]
+
+
+def test_placement_with_multiple_sides_and_columns_fans_out() -> None:
+    pallet = build_pallet([CellPlacement(value="X", sides=[1, 2], columns=[1, 2])])
 
     sides = {side.number: side for side in pallet.sides}
     assert set(sides) == {1, 2}
+    for side in sides.values():
+        assert [column.number for column in side.columns] == [1, 2]
+        for column in side.columns:
+            assert [cell.value for cell in column.cells] == ["X"]
 
-    assert [column.number for column in sides[1].columns] == [1, 2, 3]
-    assert [column.number for column in sides[2].columns] == [1, 2]
+
+def test_sides_and_columns_are_sorted_by_number() -> None:
+    pallet = build_pallet(
+        [
+            CellPlacement(value="A", sides=[3], columns=[2]),
+            CellPlacement(value="B", sides=[1], columns=[3]),
+            CellPlacement(value="C", sides=[1], columns=[1]),
+        ],
+    )
+
+    assert [side.number for side in pallet.sides] == [1, 3]
+    assert [column.number for column in pallet.sides[0].columns] == [1, 3]
 
 
-def test_multiple_pallets_split_on_nonzero_count() -> None:
-    csv_data = """\
-        parent,baby,team_key,team_name,count,color,logo,column,side,callout,dc
-        PZ-A,BA1,TKA,Team A,0,Red,Logo,1,1,No,
-        ,,,,3,,,,,No,
-        PZ-B,BB1,TKB,Team B,0,Blue,Logo,1,1,Yes,
-        ,,,,7,,,,,Yes,
-    """
-    pallets = process(_request(csv_data))
+def test_empty_placements_produces_empty_pallet() -> None:
+    pallet = build_pallet([])
+    assert pallet.sides == []
 
-    assert len(pallets) == 2
-    assert pallets[0].zppk == "PZ-A"
-    assert pallets[0].team_key == "TKA"
-    assert pallets[0].required_count == 3
-    assert pallets[0].callout == ""
-    assert pallets[1].zppk == "PZ-B"
-    assert pallets[1].team_key == "TKB"
-    assert pallets[1].required_count == 7
-    assert pallets[1].callout == "CLC CREATIVE CORRUGATE"
+
+def test_placement_with_empty_sides_or_columns_is_skipped() -> None:
+    pallet = build_pallet(
+        [
+            CellPlacement(value="A", sides=[], columns=[1]),
+            CellPlacement(value="B", sides=[1], columns=[]),
+        ],
+    )
+    assert pallet.sides == []
 
 
 def test_cell_is_constructible_directly_with_extras() -> None:
-    cell = Cell(value="X", photo_lookup_key="K", extras={"size": "M"})
+    cell = Cell(value="X", extras={"size": "M"})
     assert cell.value == "X"
-    assert cell.photo_lookup_key == "K"
     assert cell.extras == {"size": "M"}
+
+
+def test_cell_extras_default_to_empty_dict() -> None:
+    cell = Cell(value="X")
+    assert cell.extras == {}
+
+
+def test_pallet_is_constructible_directly_with_extras() -> None:
+    pallet = Pallet(sides=[], extras={"order_id": "1"})
+    assert pallet.sides == []
+    assert pallet.extras == {"order_id": "1"}

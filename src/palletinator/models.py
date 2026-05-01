@@ -1,16 +1,7 @@
-"""Output data model for processed pallets."""
+"""Output data model for built pallets."""
 
 from dataclasses import dataclass, field
-from enum import Enum, auto
 from typing import Any
-
-
-class PalletType(Enum):
-    """Type of pallet build."""
-
-    FULL = auto()
-    HALF = auto()
-    TOWER = auto()
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,21 +11,18 @@ class Cell:
     Attributes
     ----------
     value
-        The representation value displayed in the cell (the baby ZPPK).
-    photo_lookup_key
-        Key the caller uses to look up the design image for this cell.
+        The value displayed in the cell.
     extras
         Open-ended metadata bag for caller-defined fields.
     """
 
     value: str
-    photo_lookup_key: str
     extras: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
 class Column:
-    """A column on a pallet side, ordered top-to-bottom by size band."""
+    """A column on a pallet side, ordered top-to-bottom."""
 
     number: int
     cells: list[Cell]
@@ -50,13 +38,15 @@ class Side:
 
 @dataclass(frozen=True, slots=True)
 class Pallet:
-    """A fully-resolved pallet build."""
+    """A fully-resolved pallet build.
 
-    zppk: str
-    team_key: str
-    team_name: str
-    callout: str
-    dc_target: str
-    pallet_type: PalletType
-    required_count: int
+    Attributes
+    ----------
+    sides
+        Sides on the pallet, ordered by side number.
+    extras
+        Open-ended metadata bag for caller-defined fields.
+    """
+
     sides: list[Side]
+    extras: dict[str, Any] = field(default_factory=dict)

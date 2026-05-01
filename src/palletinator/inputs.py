@@ -1,32 +1,28 @@
-"""Input types for the pallet processor."""
+"""Input types for the pallet builder."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass(frozen=True, slots=True)
-class ColumnNames:
-    """Spreadsheet column headers the engine should read each field from.
+class CellPlacement:
+    """Specification for where a cell goes on a pallet build.
 
-    A ``None`` entry means the field is not present in the export and a
-    sensible default will be used.
+    Attributes
+    ----------
+    value
+        The value displayed in the resulting cell.
+    sides
+        Side numbers the cell appears on.
+    columns
+        Column numbers (within each side) the cell appears in.
+    extras
+        Open-ended metadata bag for caller-defined fields. A copy is
+        attached to every emitted ``Cell`` so callers can mutate per-cell
+        state without cross-talk.
     """
 
-    parent_zppk: str
-    baby_zppk: str
-    team_key: str
-    team_name: str
-    requested_pallet_count: str
-    color_description: str
-    logo_description: str
-    column: str
-    side: str
-    callout: str | None = None
-    date_column: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class Request:
-    """A request to process a pallet program export."""
-
-    csv_data: str
-    column_names: ColumnNames
+    value: str
+    sides: list[int]
+    columns: list[int]
+    extras: dict[str, Any] = field(default_factory=dict)
