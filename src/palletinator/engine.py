@@ -2,13 +2,13 @@
 
 Bucket caller-supplied cell placements into a structured `Pallet` of
 sides, columns, and cells. The engine performs no I/O and applies no
-business rules: callers decide where each cell goes, what extra
-metadata it carries, and what pallet type the build represents.
+business rules: callers decide where each cell goes and what extra
+metadata it carries.
 """
 
 from typing import TYPE_CHECKING, Any
 
-from palletinator.models import Cell, Column, Pallet, PalletType, Side
+from palletinator.models import Cell, Column, Pallet, Side
 
 if TYPE_CHECKING:
     from palletinator.inputs import CellPlacement
@@ -19,7 +19,6 @@ DEFAULT_MAX_CELLS_PER_COLUMN = 4
 def build_pallet(
     placements: list[CellPlacement],
     *,
-    pallet_type: PalletType = PalletType.TOWER,
     max_cells_per_column: int = DEFAULT_MAX_CELLS_PER_COLUMN,
     extras: dict[str, Any] | None = None,
 ) -> Pallet:
@@ -30,8 +29,6 @@ def build_pallet(
     placements
         The cells to place. Each placement is materialised into one
         ``Cell`` per ``(side, column)`` coordinate it specifies.
-    pallet_type
-        The build type for the resulting pallet.
     max_cells_per_column
         Cap on the number of cells per column. The most recently placed
         cells win when the cap is exceeded.
@@ -59,7 +56,6 @@ def build_pallet(
         sides.append(Side(number=side_num, columns=columns))
 
     return Pallet(
-        pallet_type=pallet_type,
         sides=sides,
         extras=dict(extras) if extras else {},
     )

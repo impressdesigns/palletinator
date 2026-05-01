@@ -4,26 +4,18 @@ from palletinator import (
     Cell,
     CellPlacement,
     Pallet,
-    PalletType,
     build_pallet,
 )
 
 
-def test_build_pallet_returns_pallet_with_pallet_type_and_extras() -> None:
+def test_build_pallet_returns_pallet_with_extras() -> None:
     pallet = build_pallet(
         [CellPlacement(value="X", sides=[1], columns=[1])],
-        pallet_type=PalletType.HALF,
         extras={"order_id": "PZ-1"},
     )
 
     assert isinstance(pallet, Pallet)
-    assert pallet.pallet_type is PalletType.HALF
     assert pallet.extras == {"order_id": "PZ-1"}
-
-
-def test_pallet_type_defaults_to_tower() -> None:
-    pallet = build_pallet([CellPlacement(value="X", sides=[1], columns=[1])])
-    assert pallet.pallet_type is PalletType.TOWER
 
 
 def test_pallet_extras_default_to_empty_dict() -> None:
@@ -156,7 +148,6 @@ def test_cell_extras_default_to_empty_dict() -> None:
 
 
 def test_pallet_is_constructible_directly_with_extras() -> None:
-    pallet = Pallet(pallet_type=PalletType.FULL, sides=[], extras={"order_id": "1"})
-    assert pallet.pallet_type is PalletType.FULL
+    pallet = Pallet(sides=[], extras={"order_id": "1"})
     assert pallet.sides == []
     assert pallet.extras == {"order_id": "1"}
